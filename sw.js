@@ -1,4 +1,4 @@
-const CACHE = "halfdome-v3";
+const CACHE = "halfdome-v4";
 const ASSETS = ["./", "./index.html", "./styles.css", "./app.js", "./manifest.webmanifest",
   "./icons/icon-192.png", "./icons/icon-512.png"];
 
@@ -23,6 +23,37 @@ function isAppShell(path) {
 self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
   if (e.request.method !== "GET" || url.origin !== location.origin) return;
+
+  // Shared photo list: network-first, cache fallback (works offline after first sync)
+  if (url.pathname.endsWith("/api/photos")) {
+    e.respondWith(
+      fetch(e.request).then((res) => {
+        if (res.ok) {
+          const copy = res.clone();
+          caches.open(CACHE).then((c) => c.put(e.request, copy));
+        }
+        return res;
+      }).catch(() => caches.match(e.request, { ignoreSearch: true }))
+    );
+    return;
+  }
+
+  // Shared photo bytes: cache-first (immutable), so trail offline works
+  if (url.pathname.endsWith("/api/photo")) {
+    e.respondWith(
+      caches.match(e.request).then((hit) => {
+        if (hit) return hit;
+        return fetch(e.request).then((res) => {
+          if (res.ok) {
+            const copy = res.clone();
+            caches.open(CACHE).then((c) => c.put(e.request, copy));
+          }
+          return res;
+        });
+      })
+    );
+    return;
+  }
 
   if (isAppShell(url.pathname)) {
     e.respondWith(

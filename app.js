@@ -382,6 +382,7 @@ function renderDirectionStops() {
         img.src = objUrl || it.url;
         img.alt = it.name || stop.title;
         img.loading = "lazy";
+        pendingBadge(d, it);
         if (!it.blob && it.url) {
           const tag = document.createElement("span");
           tag.className = "link-tag";
@@ -391,16 +392,18 @@ function renderDirectionStops() {
         }
         const del = document.createElement("button");
         del.className = "ghost"; del.textContent = "✕"; del.title = "Remove";
-        del.onclick = async () => { await dbDelete(it.id); if (objUrl) URL.revokeObjectURL(objUrl); refresh(); updatePhotoCount(); };
+        del.onclick = async () => { await forgetCloudForLocal(it.id); await dbDelete(it.id); if (objUrl) URL.revokeObjectURL(objUrl); refresh(); updatePhotoCount(); };
         d.append(img, del);
         thumbs.appendChild(d);
       });
       updatePhotoCount();
+      appendShared(up, stop.key, stop.title);
     };
     input.onchange = async () => {
       if (!input.files.length) return;
       await dbAddPhotos(stop.key, input.files);
       input.value = "";
+      await pushPending(stop.key);
       refresh();
     };
     // Drag & drop from files or from another browser tab
@@ -426,8 +429,9 @@ function renderDirectionStops() {
           saved = true;
         }
       }
-      if (saved) refresh();
+      if (saved) { await pushPending(stop.key); refresh(); }
     });
+    slotRefreshers[stop.key] = refresh;
     refresh();
   });
 }
@@ -435,6 +439,124 @@ async function updatePhotoCount() {
   const n = await dbCountAll();
   const el = $("photo-count");
   if (el) el.textContent = n ? `${n} photo${n === 1 ? "" : "s"} stored offline` : "no photos stored yet";
+}
+
+// --- Shared cloud photos (R2 via /api; silent local-only fallback) ---
+let cloudEnabled = false;
+const slotRefreshers = {};
+const CLOUDMAP_KEY = "hd-cloudmap";
+function getCloudMap() { try { return JSON.parse(localStorage.getItem(CLOUDMAP_KEY) || "{}"); } catch { return {}; } }
+function saveCloudMap(m) { try { localStorage.setItem(CLOUDMAP_KEY, JSON.stringify(m)); } catch {} }
+
+async function cloudPing() {
+  try {
+    const r = await fetch("./api/photos?limit=1", { cache: "no-store" });
+    if (!r.ok) return false;
+    return Array.isArray((await r.json()).photos);
+  } catch { return false; }
+}
+async function cloudList(slot) {
+  const r = await fetch("./api/photos?slot=" + encodeURIComponent(slot), { cache: "no-store" });
+  if (!r.ok) throw new Error("list failed");
+  return (await r.json()).photos || [];
+}
+// Upload any local photos in this slot that aren't on the cloud yet
+async function pushPending(slot) {
+  if (!cloudEnabled || !navigator.onLine) return false;
+  const locals = await dbListBySlot(slot).catch(() => []);
+  const map = getCloudMap();
+  let changed = false;
+  for (const it of locals) {
+    if (map[it.id]) continue;
+    try {
+      let res;
+      if (it.blob) {
+        const fd = new FormData();
+        fd.append("slot", slot);
+        fd.append("file", it.blob, it.name || "photo");
+        const r = await fetch("./api/photos", { method: "POST", body: fd });
+        if (!r.ok) continue;
+        res = await r.json();
+      } else if (it.url) {
+        const r = await fetch("./api/photos", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ slot, url: it.url }),
+        });
+        if (!r.ok) continue;
+        res = await r.json();
+      }
+      if (res && res.key) { map[it.id] = res.key; changed = true; }
+    } catch { /* offline or hiccup — retry on next sync */ }
+  }
+  if (changed) saveCloudMap(map);
+  return changed;
+}
+// Delete the cloud copy linked to a local record (if any)
+async function forgetCloudForLocal(localId) {
+  const map = getCloudMap();
+  const key = map[localId];
+  if (!key) return;
+  delete map[localId];
+  saveCloudMap(map);
+  if (cloudEnabled && navigator.onLine) {
+    try { await fetch("./api/photo?key=" + encodeURIComponent(key), { method: "DELETE" }); } catch {}
+  }
+}
+// Render "Shared from all devices" thumbs inside a photo zone
+async function appendShared(zone, slot, label) {
+  let wrap = zone.querySelector(":scope > .shared-wrap");
+  if (wrap) wrap.innerHTML = "";
+  else { wrap = document.createElement("div"); wrap.className = "shared-wrap"; zone.appendChild(wrap); }
+  if (!cloudEnabled) return;
+  let photos = [];
+  try { photos = await cloudList(slot); } catch { return; }
+  const known = new Set(Object.values(getCloudMap()));
+  const fresh = photos.filter((p) => !known.has(p.key));
+  if (!fresh.length) return;
+  const note = zone.querySelector(":scope > .empty-note");
+  if (note) note.style.display = "none";
+  const head = document.createElement("div");
+  head.className = "shared-head";
+  head.textContent = "Shared from all devices ↓";
+  wrap.appendChild(head);
+  const grid = document.createElement("div");
+  grid.className = "thumbs";
+  fresh.forEach((p) => {
+    const d = document.createElement("div");
+    d.className = "thumb shared";
+    const img = document.createElement("img");
+    img.src = "./api/photo?key=" + encodeURIComponent(p.key);
+    img.alt = p.name || ("Shared " + label);
+    img.loading = "lazy";
+    const del = document.createElement("button");
+    del.className = "ghost"; del.textContent = "✕"; del.title = "Delete shared photo (all devices)";
+    del.onclick = async () => {
+      if (!confirm("Delete this shared photo for all devices?")) return;
+      try { await fetch("./api/photo?key=" + encodeURIComponent(p.key), { method: "DELETE" }); } catch {}
+      d.remove();
+    };
+    d.append(img, del);
+    grid.appendChild(d);
+  });
+  wrap.appendChild(grid);
+}
+function pendingBadge(d, it) {
+  if (cloudEnabled && it.blob && !getCloudMap()[it.id]) {
+    const tag = document.createElement("span");
+    tag.className = "pending-tag";
+    tag.textContent = "queued";
+    tag.title = "Saved on this device — uploads when online";
+    d.appendChild(tag);
+  }
+}
+async function bootCloud() {
+  cloudEnabled = await cloudPing();
+  if (!cloudEnabled) return;
+  const slots = Object.keys(slotRefreshers);
+  for (const s of slots) await pushPending(s);
+  slots.forEach((s) => { try { slotRefreshers[s](); } catch {} });
+  const pill = $("offline-pill");
+  if (pill && navigator.onLine) pill.textContent = "● online — photos sync across devices";
 }
 
 // --- Map section: drag-in photos of a map (IndexedDB slot "map") ---
@@ -452,8 +574,9 @@ function renderMapPhotos() {
       const img = document.createElement("img");
       const objUrl = it.blob ? URL.createObjectURL(it.blob) : null;
       img.src = objUrl || it.url;
-      img.alt = it.name || "Trail map";
-      img.loading = "lazy";
+        img.alt = it.name || "Trail map";
+        img.loading = "lazy";
+        pendingBadge(d, it);
       if (!it.blob && it.url) {
         const tag = document.createElement("span");
         tag.className = "link-tag";
@@ -463,16 +586,18 @@ function renderMapPhotos() {
       }
       const del = document.createElement("button");
       del.className = "ghost"; del.textContent = "✕"; del.title = "Remove";
-      del.onclick = async () => { await dbDelete(it.id); if (objUrl) URL.revokeObjectURL(objUrl); refresh(); updatePhotoCount(); };
+      del.onclick = async () => { await forgetCloudForLocal(it.id); await dbDelete(it.id); if (objUrl) URL.revokeObjectURL(objUrl); refresh(); updatePhotoCount(); };
       d.append(img, del);
       thumbs.appendChild(d);
     });
     updatePhotoCount();
+    appendShared(zone, "map", "map");
   };
   input.onchange = async () => {
     if (!input.files.length) return;
     await dbAddPhotos("map", input.files);
     input.value = "";
+    await pushPending("map");
     refresh();
   };
   ["dragenter", "dragover"].forEach((ev) =>
@@ -493,13 +618,14 @@ function renderMapPhotos() {
       if (url) {
         hint.textContent = "Saving image…";
         await storeDroppedImageUrl("map", url);
-        hint.textContent = "Drop map images to save here";
-        saved = true;
+          hint.textContent = "Drop map images to save here";
+          saved = true;
+        }
       }
-    }
-    if (saved) refresh();
+      if (saved) { await pushPending("map"); refresh(); }
   });
-  refresh();
+    slotRefreshers["map"] = refresh;
+    refresh();
 }
 
 // --- PWA shell ---
@@ -531,6 +657,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   renderDirectionStops();
   renderMapPhotos();
+  bootCloud();
   const exp = $("export-photos");
   if (exp) exp.onclick = async () => {
     const n = await dbCountAll();
@@ -540,6 +667,7 @@ document.addEventListener("DOMContentLoaded", () => {
   updateOnline();
   window.addEventListener("online", updateOnline);
   window.addEventListener("offline", updateOnline);
+  window.addEventListener("online", () => bootCloud());
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("./sw.js").catch(() => {});
     // Auto-reload once when an updated SW takes control, so edits show up
