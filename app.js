@@ -382,7 +382,7 @@ function renderDirectionStops() {
         img.src = objUrl || it.url;
         img.alt = it.name || stop.title;
         img.loading = "lazy";
-        pendingBadge(d, it);
+        syncBadge(d, it);
         if (!it.blob && it.url) {
           const tag = document.createElement("span");
           tag.className = "link-tag";
@@ -540,14 +540,20 @@ async function appendShared(zone, slot, label) {
   });
   wrap.appendChild(grid);
 }
-function pendingBadge(d, it) {
-  if (cloudEnabled && it.blob && !getCloudMap()[it.id]) {
-    const tag = document.createElement("span");
+function syncBadge(d, it) {
+  if (!cloudEnabled || !it.blob) return;
+  const tag = document.createElement("span");
+  if (getCloudMap()[it.id]) {
+    tag.className = "link-tag";
+    tag.style.color = "var(--accent)";
+    tag.textContent = "shared ✓";
+    tag.title = "On the cloud — visible on all devices";
+  } else {
     tag.className = "pending-tag";
     tag.textContent = "queued";
-    tag.title = "Saved on this device — uploads when online";
-    d.appendChild(tag);
+    tag.title = "Saved on this device only — uploads automatically when online";
   }
+  d.appendChild(tag);
 }
 async function bootCloud() {
   cloudEnabled = await cloudPing();
@@ -576,7 +582,7 @@ function renderMapPhotos() {
       img.src = objUrl || it.url;
         img.alt = it.name || "Trail map";
         img.loading = "lazy";
-        pendingBadge(d, it);
+        syncBadge(d, it);
       if (!it.blob && it.url) {
         const tag = document.createElement("span");
         tag.className = "link-tag";
