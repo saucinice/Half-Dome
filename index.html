@@ -88,10 +88,11 @@
 <section id="map" class="card">
   <h2>Map</h2>
   <p class="muted small">Drag in photos of your map here (trail map, screenshot, CalTopo print). Stored offline on this device, and shared to all devices when online. Multiple allowed — tap ✕ to remove.</p>
-  <div class="uploader" id="map-drop">
+  <div class="uploader" id="map-drop" data-slot="map">
     <strong class="small">🗺 Trail map photos</strong>
-    <div class="small muted"><strong>Drag & drop</strong> map images here, or use Choose Files.</div>
+    <div class="small muted"><strong>Drag & drop</strong> map images here, use Choose Files, or <strong>paste</strong>.</div>
     <input id="map-input" type="file" accept="image/*" multiple />
+    <button class="ghost small-btn" id="map-paste" title="Paste a photo from your clipboard here">Paste photo</button>
     <div class="drop-hint" id="map-hint">Drop map images to save here</div>
     <div class="thumbs" id="map-thumbs"></div>
     <div class="empty-note" id="map-empty">No map photos yet. Drag images here or use Choose Files.</div>

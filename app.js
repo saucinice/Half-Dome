@@ -354,10 +354,20 @@ function renderDirectionStops() {
     };
     const up = document.createElement("div");
     up.className = "uploader";
-    up.innerHTML = `<strong class="small">📷 ${stop.title} photos</strong><div class="small muted">Upload, or <strong>drag & drop</strong> image files / browser images here — saved on device, multiple allowed.</div>`;
+    up.dataset.slot = stop.key;
+    up.innerHTML = `<strong class="small">📷 ${stop.title} photos</strong><div class="small muted">Upload, <strong>drag & drop</strong>, or <strong>paste</strong> — saved on device, multiple allowed.</div>`;
     const input = document.createElement("input");
     input.type = "file"; input.accept = "image/*"; input.multiple = true;
     // capture on mobile still allows library choice since multiple is set
+    const pasteBtn = document.createElement("button");
+    pasteBtn.className = "ghost small-btn";
+    pasteBtn.textContent = "Paste photo";
+    pasteBtn.title = "Paste a photo from your clipboard into this landmark";
+    pasteBtn.onclick = async () => {
+      lastSlot = stop.key;
+      setArmed(stop.key);
+      if (await tryClipboardRead(stop.key)) setArmed(null);
+    };
     const thumbs = document.createElement("div");
     thumbs.className = "thumbs";
     const empty = document.createElement("div");
@@ -366,7 +376,7 @@ function renderDirectionStops() {
     const dropHint = document.createElement("div");
     dropHint.className = "drop-hint";
     dropHint.textContent = "Drop images to save to this landmark";
-    up.append(input, dropHint, thumbs, empty);
+    up.append(input, pasteBtn, dropHint, thumbs, empty);
     card.appendChild(up);
     wrap.appendChild(card);
 
@@ -401,6 +411,7 @@ function renderDirectionStops() {
     };
     input.onchange = async () => {
       if (!input.files.length) return;
+      lastSlot = stop.key;
       await dbAddPhotos(stop.key, input.files);
       input.value = "";
       await pushPending(stop.key);
@@ -415,6 +426,7 @@ function renderDirectionStops() {
     );
     up.addEventListener("drop", async (e) => {
       up.classList.remove("drag-over");
+      lastSlot = stop.key;
       const dt = e.dataTransfer;
       let saved = false;
       if (dt && dt.files && dt.files.length) {
@@ -441,7 +453,57 @@ async function updatePhotoCount() {
   if (el) el.textContent = n ? `${n} photo${n === 1 ? "" : "s"} stored offline` : "no photos stored yet";
 }
 
-// --- Shared cloud photos (R2 via /api; silent local-only fallback) ---
+// --- Paste photos from clipboard (Ctrl+V / ⌘V) ---
+let armedSlot = null;
+let lastSlot = "map";
+function setArmed(slot) {
+  armedSlot = slot;
+  if (slot) lastSlot = slot;
+  document.querySelectorAll(".uploader.armed").forEach((el) => el.classList.remove("armed"));
+  document.querySelectorAll(".armed-note").forEach((el) => el.remove());
+  if (!slot) return;
+  const zone = document.querySelector(`[data-slot="${slot}"]`);
+  if (!zone) return;
+  zone.classList.add("armed");
+  const note = document.createElement("div");
+  note.className = "armed-note";
+  note.textContent = "Ready — press Ctrl+V (⌘V on Mac) to paste your photo here";
+  zone.insertBefore(note, zone.firstChild);
+  zone.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+async function savePastedFiles(slot, files) {
+  const imgs = Array.from(files).filter((f) => !f.type || f.type.startsWith("image/"));
+  if (!imgs.length || !slot || !slotRefreshers[slot]) return false;
+  await dbAddPhotos(slot, imgs);
+  await pushPending(slot);
+  try { slotRefreshers[slot](); } catch {}
+  return true;
+}
+async function tryClipboardRead(slot) {
+  try {
+    if (!navigator.clipboard || !navigator.clipboard.read) return false;
+    const items = await navigator.clipboard.read();
+    for (const item of items) {
+      const type = (item.types || []).find((t) => t.startsWith("image/"));
+      if (type) {
+        const blob = await item.getType(type);
+        const file = new File([blob], "pasted." + type.split("/")[1].split("+")[0], { type });
+        return await savePastedFiles(slot, [file]);
+      }
+    }
+  } catch { /* denied — user pastes with Ctrl+V instead */ }
+  return false;
+}
+document.addEventListener("paste", async (e) => {
+  const files = e.clipboardData && e.clipboardData.files;
+  if (!files || !files.length) return;
+  const slot = armedSlot || lastSlot;
+  if (!slot || !slotRefreshers[slot]) return;
+  e.preventDefault();
+  if (await savePastedFiles(slot, files)) setArmed(null);
+});
+
+// --- Shared cloud photos (KV via /api; silent local-only fallback) ---
 let cloudEnabled = false;
 const slotRefreshers = {};
 const CLOUDMAP_KEY = "hd-cloudmap";
@@ -570,6 +632,15 @@ function renderMapPhotos() {
   const zone = $("map-drop"), input = $("map-input"),
     thumbs = $("map-thumbs"), empty = $("map-empty"), hint = $("map-hint");
   if (!zone) return;
+  const mapPaste = $("map-paste");
+  if (mapPaste && !mapPaste.dataset.wired) {
+    mapPaste.dataset.wired = "1";
+    mapPaste.onclick = async () => {
+      lastSlot = "map";
+      setArmed("map");
+      if (await tryClipboardRead("map")) setArmed(null);
+    };
+  }
   const refresh = async () => {
     const items = await dbListBySlot("map").catch(() => []);
     thumbs.innerHTML = "";
@@ -601,6 +672,7 @@ function renderMapPhotos() {
   };
   input.onchange = async () => {
     if (!input.files.length) return;
+    lastSlot = "map";
     await dbAddPhotos("map", input.files);
     input.value = "";
     await pushPending("map");
@@ -614,6 +686,7 @@ function renderMapPhotos() {
   );
   zone.addEventListener("drop", async (e) => {
     zone.classList.remove("drag-over");
+    lastSlot = "map";
     const dt = e.dataTransfer;
     let saved = false;
     if (dt && dt.files && dt.files.length) {
