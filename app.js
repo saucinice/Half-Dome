@@ -383,7 +383,9 @@ function renderDirectionStops() {
     const refresh = async () => {
       const items = await dbListBySlot(stop.key).catch(() => []);
       thumbs.innerHTML = "";
-      empty.style.display = items.length ? "none" : "block";
+      const bundled = BUNDLED[stop.key] || [];
+      empty.style.display = (items.length + bundled.length) ? "none" : "block";
+      bundled.forEach((rel) => thumbs.appendChild(bundledThumb(rel, stop.title)));
       items.sort((a, b) => a.ts - b.ts).forEach((it) => {
         const d = document.createElement("div");
         d.className = "thumb";
@@ -627,6 +629,32 @@ async function bootCloud() {
   if (pill && navigator.onLine) pill.textContent = "● online — photos sync across devices";
 }
 
+// Photos shipped with the app (img/ + manifest.json): identical on every
+// device, cached offline on first visit. Rendered first, locked (no delete).
+let BUNDLED = {};
+function bundledThumb(rel, label) {
+  const d = document.createElement("div");
+  d.className = "thumb bundled";
+  const img = document.createElement("img");
+  img.src = "./img/" + rel;
+  img.alt = label || "Guide photo";
+  img.loading = "lazy";
+  const tag = document.createElement("span");
+  tag.className = "link-tag";
+  tag.style.color = "var(--accent)";
+  tag.textContent = "guide";
+  tag.title = "Ships with the app — on every device, offline";
+  d.append(img, tag);
+  return d;
+}
+fetch("./img/manifest.json", { cache: "no-store" })
+  .then((r) => (r.ok ? r.json() : {}))
+  .then((m) => {
+    BUNDLED = m && typeof m === "object" ? m : {};
+    Object.values(slotRefreshers).forEach((fn) => { try { fn(); } catch {} });
+  })
+  .catch(() => {});
+
 // --- Map section: drag-in photos of a map (IndexedDB slot "map") ---
 function renderMapPhotos() {
   const zone = $("map-drop"), input = $("map-input"),
@@ -644,7 +672,9 @@ function renderMapPhotos() {
   const refresh = async () => {
     const items = await dbListBySlot("map").catch(() => []);
     thumbs.innerHTML = "";
-    empty.style.display = items.length ? "none" : "block";
+    const bundled = BUNDLED["map"] || [];
+    empty.style.display = (items.length + bundled.length) ? "none" : "block";
+    bundled.forEach((rel) => thumbs.appendChild(bundledThumb(rel, "Trail map")));
     items.sort((a, b) => a.ts - b.ts).forEach((it) => {
       const d = document.createElement("div");
       d.className = "thumb";

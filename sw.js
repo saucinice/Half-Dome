@@ -1,9 +1,19 @@
-const CACHE = "halfdome-v4";
+const CACHE = "halfdome-v5";
 const ASSETS = ["./", "./index.html", "./styles.css", "./app.js", "./manifest.webmanifest",
   "./icons/icon-192.png", "./icons/icon-512.png"];
 
 self.addEventListener("install", (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)).then(() => self.skipWaiting()));
+  e.waitUntil((async () => {
+    const c = await caches.open(CACHE);
+    await c.addAll(ASSETS);
+    // Bundle every shipped guide photo so one online visit = offline forever
+    try {
+      const m = await (await fetch("./img/manifest.json")).json();
+      const files = Object.values(m).flat().map((f) => "./img/" + f);
+      if (files.length) await c.addAll(files);
+    } catch {}
+    await self.skipWaiting();
+  })());
 });
 self.addEventListener("activate", (e) => {
   e.waitUntil(
