@@ -707,6 +707,44 @@ function renderMapPhotos() {
     refresh();
 }
 
+// --- Fullscreen swipe viewer (tap any photo) ---
+let vItems = [], vIdx = 0, vTouchX = null;
+function openViewer(items, i) {
+  if (!items.length) return;
+  vItems = items;
+  vIdx = Math.max(0, Math.min(i, items.length - 1));
+  showViewer();
+  $("viewer").hidden = false;
+  document.body.style.overflow = "hidden";
+}
+function showViewer() {
+  const img = $("viewer-img");
+  img.src = vItems[vIdx].src;
+  img.alt = vItems[vIdx].alt || "Trail photo";
+  $("viewer-count").textContent = `${vIdx + 1} / ${vItems.length}`;
+}
+function stepViewer(d) {
+  if (!vItems.length) return;
+  vIdx = (vIdx + d + vItems.length) % vItems.length;
+  showViewer();
+}
+function closeViewer() {
+  $("viewer").hidden = true;
+  document.body.style.overflow = "";
+  vItems = [];
+}
+// One delegated tap handler covers map + all landmark + shared thumbs
+document.addEventListener("click", (e) => {
+  const img = e.target && e.target.closest ? e.target.closest(".thumb img") : null;
+  if (!img || !$("viewer")) return;
+  const zone = img.closest(".uploader") || document;
+  const all = Array.from(zone.querySelectorAll(".thumb img"));
+  openViewer(
+    all.map((im) => ({ src: im.currentSrc || im.src, alt: im.alt })),
+    Math.max(0, all.indexOf(img))
+  );
+});
+
 // --- PWA shell ---
 function updateOnline() {
   const pill = $("offline-pill");
@@ -737,6 +775,26 @@ document.addEventListener("DOMContentLoaded", () => {
   renderDirectionStops();
   renderMapPhotos();
   bootCloud();
+  // Viewer controls: buttons, swipe, keyboard
+  $("viewer-close").onclick = closeViewer;
+  $("viewer-prev").onclick = (e) => { e.stopPropagation(); stepViewer(-1); };
+  $("viewer-next").onclick = (e) => { e.stopPropagation(); stepViewer(1); };
+  const viewerEl = $("viewer");
+  viewerEl.addEventListener("touchstart", (e) => {
+    vTouchX = e.changedTouches[0].clientX;
+  }, { passive: true });
+  viewerEl.addEventListener("touchend", (e) => {
+    if (vTouchX === null) return;
+    const dx = e.changedTouches[0].clientX - vTouchX;
+    vTouchX = null;
+    if (Math.abs(dx) > 40) stepViewer(dx < 0 ? 1 : -1);
+  }, { passive: true });
+  document.addEventListener("keydown", (e) => {
+    if ($("viewer").hidden) return;
+    if (e.key === "Escape") closeViewer();
+    if (e.key === "ArrowLeft") stepViewer(-1);
+    if (e.key === "ArrowRight") stepViewer(1);
+  });
   const exp = $("export-photos");
   if (exp) exp.onclick = async () => {
     const n = await dbCountAll();
