@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Half Dome — Gear, Directions & Pace (Offline)</title>
+<meta name="description" content="Offline PWA: gear checklist, landmark directions with your own photos, offline pace calculator." />
+<meta name="theme-color" content="#1a2b1f" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Half Dome" />
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="icon" href="icons/icon-192.png" />
+<link rel="apple-touch-icon" href="icons/icon-192.png" />
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<header class="top">
+  <div class="top-inner">
+    <div class="brand">⛰ Half Dome — Offline</div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <span id="offline-pill">● online</span>
+    </div>
+  </div>
+  <nav class="toc" aria-label="Sections">
+    <a href="#gear">Gear List</a>
+    <a href="#calculator">Pace Calculator</a>
+    <a href="#map">Map</a>
+    <a href="#directions">Directions + Photos</a>
+  </nav>
+</header>
+
+<main>
+<section class="card">
+  <h1 style="margin:0">Half Dome Hike <span class="muted small">16 mi • 5,200 ft • 9–12h</span></h1>
+  <p class="muted small">Trimmed offline build: gear, directions with your landmark photos, offline pace calculator. Photos stay on this device (IndexedDB) and work with no service.</p>
+</section>
+
+<section id="gear" class="card">
+  <h2>Gear List — Checklist (saves offline)</h2>
+  <p class="muted small">Tap to check. Stored on device. Break everything in before hike day.</p>
+  <ul class="checklist" id="gear-list"></ul>
+  <div class="add-row">
+    <input id="gear-new" type="text" placeholder="Add item — e.g. Headlamp" maxlength="80" />
+    <button id="gear-add" title="Add item">＋ Add</button>
+  </div>
+  <div class="actions">
+    <button class="ghost" id="gear-reset">Reset to defaults</button>
+    <span id="gear-count" class="small muted"></span>
+  </div>
+</section>
+
+<section id="calculator" class="card">
+  <h2>Pace Calculator — works offline</h2>
+  <p class="muted small">Updates live as you type. Saved on device. Plan around a noon turnaround at the cables.</p>
+  <div class="grid2">
+    <div>
+      <label>Uphill pace (min / mile)</label>
+      <input id="up-pace" type="number" min="15" max="90" step="1" value="35" />
+      <label>Downhill pace (min / mile)</label>
+      <input id="down-pace" type="number" min="10" max="60" step="1" value="22" />
+      <label>Start time</label>
+      <input id="start-time" type="time" value="05:00" />
+    </div>
+    <div>
+      <label>Cables up (min)</label>
+      <input id="cables-up" type="number" min="5" max="120" value="30" />
+      <label>Summit time (min)</label>
+      <input id="summit-min" type="number" min="0" max="180" value="30" />
+      <label>Cables down (min)</label>
+      <input id="cables-down" type="number" min="5" max="120" value="30" />
+    </div>
+  </div>
+  <div class="actions">
+    <button id="calc-now">Recalculate</button>
+    <button class="ghost" id="calc-print">Print chart</button>
+  </div>
+  <div id="calc-warning" class="small" style="margin-top:8px"></div>
+  <div style="overflow-x:auto;margin-top:8px">
+  <table id="calc-table">
+    <thead><tr><th>Landmark</th><th>Mi</th><th>Notes</th><th>Elapsed</th><th>Time</th></tr></thead>
+    <tbody></tbody>
+  </table>
+  </div>
+</section>
+
+<section id="map" class="card">
+  <h2>Map</h2>
+  <p class="muted small">Drag in photos of your map here (trail map, screenshot, CalTopo print). Stored offline on this device. Multiple allowed — tap ✕ to remove.</p>
+  <div class="uploader" id="map-drop">
+    <strong class="small">🗺 Trail map photos</strong>
+    <div class="small muted"><strong>Drag & drop</strong> map images here, or use Choose Files.</div>
+    <input id="map-input" type="file" accept="image/*" multiple />
+    <div class="drop-hint" id="map-hint">Drop map images to save here</div>
+    <div class="thumbs" id="map-thumbs"></div>
+    <div class="empty-note" id="map-empty">No map photos yet. Drag images here or use Choose Files.</div>
+  </div>
+</section>
+
+<section id="directions" class="card">
+  <h2>Directions + Your Landmark Photos</h2>
+  <p class="muted small">Descriptions are editable — tap Edit under any stop. Each landmark has its own photo slot: upload or drag & drop images, stored offline in this browser. Tap ✕ to remove a photo.</p>
+  <div class="actions">
+    <button class="ghost" id="export-photos">Export all photos (zip info)</button>
+    <span id="photo-count" class="small muted"></span>
+  </div>
+
+  <div id="landmarks"></div>
+</section>
+
+<section class="card small muted">
+  Safety: planning aid only — check NPS + NOAA before you go. Route facts summarized; add your own photos, do not redistribute copyrighted guide photos.
+</section>
+</main>
+
+<footer>Half Dome Offline PWA • v2 — gear / directions / calculator</footer>
+<script src="app.js"></script>
+</body>
+</html>
