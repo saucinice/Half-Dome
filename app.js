@@ -737,6 +737,130 @@ function renderMapPhotos() {
     refresh();
 }
 
+// --- Food list (editable: + add, edit, − remove, persists offline) ---
+const DEFAULT_FOOD = [
+  { t: "Curry Village Pizza Patio", s: "Yosemite Valley • the classic post-Half-Dome slice + beer" },
+  { t: "Base Camp Eatery", s: "Yosemite Valley Lodge • quick food-court refuel" },
+  { t: "Mountain Room Restaurant", s: "Yosemite Valley Lodge • sit-down dinner" },
+  { t: "The Ahwahnee Dining Room", s: "Yosemite Valley • fancier, reservations smart" },
+  { t: "El Portal options", s: "Just outside the park • market + diners on the drive out" },
+];
+const FOOD_KEY = "hd-food-v1";
+function getFood() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(FOOD_KEY) || "null");
+    if (Array.isArray(raw)) return raw;
+  } catch {}
+  return DEFAULT_FOOD.map((f) => ({ ...f }));
+}
+function saveFood(items) { try { localStorage.setItem(FOOD_KEY, JSON.stringify(items)); } catch {} }
+function foodMapsUrl(title) {
+  return "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(title + " Yosemite");
+}
+function loadFood() {
+  const items = getFood();
+  saveFood(items);
+  const wrap = $("food-list");
+  wrap.innerHTML = "";
+  if (!items.length) {
+    const d = document.createElement("div");
+    d.className = "empty-note";
+    d.textContent = "No spots yet — add your own below.";
+    wrap.appendChild(d);
+  }
+  items.forEach((item, i) => {
+    const row = document.createElement("div");
+    row.className = "food-row";
+    const div = document.createElement("div");
+    div.style.flex = "1";
+    const b = document.createElement("strong");
+    b.textContent = item.t;
+    div.appendChild(b);
+    if (item.s) {
+      const s = document.createElement("div");
+      s.className = "small muted";
+      s.textContent = item.s;
+      div.appendChild(s);
+    }
+    const btns = document.createElement("div");
+    btns.style.display = "flex";
+    btns.style.gap = "6px";
+    const maps = document.createElement("a");
+    maps.className = "ghost small-btn food-maps";
+    maps.textContent = "Maps";
+    maps.href = foodMapsUrl(item.t);
+    maps.target = "_blank";
+    maps.rel = "noopener";
+    const edit = document.createElement("button");
+    edit.className = "ghost small-btn";
+    edit.textContent = "Edit";
+    edit.setAttribute("aria-label", `Edit ${item.t}`);
+    edit.onclick = () => editFoodRow(row, i);
+    const rm = document.createElement("button");
+    rm.className = "ghost icon-btn";
+    rm.textContent = "−";
+    rm.title = `Remove ${item.t}`;
+    rm.setAttribute("aria-label", `Remove ${item.t}`);
+    rm.onclick = () => {
+      const cur = getFood();
+      cur.splice(i, 1);
+      saveFood(cur);
+      loadFood();
+    };
+    btns.append(maps, edit, rm);
+    row.append(div, btns);
+    wrap.appendChild(row);
+  });
+}
+function editFoodRow(row, i) {
+  const cur = getFood();
+  const item = cur[i];
+  if (!item) return;
+  row.innerHTML = "";
+  const div = document.createElement("div");
+  div.style.flex = "1";
+  div.style.display = "grid";
+  div.style.gap = "6px";
+  const nameIn = document.createElement("input");
+  nameIn.type = "text"; nameIn.value = item.t; nameIn.maxLength = 80;
+  nameIn.setAttribute("aria-label", "Restaurant name");
+  const noteIn = document.createElement("input");
+  noteIn.type = "text"; noteIn.value = item.s || ""; noteIn.maxLength = 120;
+  noteIn.setAttribute("aria-label", "Note");
+  div.append(nameIn, noteIn);
+  const btns = document.createElement("div");
+  btns.style.display = "flex";
+  btns.style.gap = "6px";
+  const save = document.createElement("button");
+  save.textContent = "Save";
+  const cancel = document.createElement("button");
+  cancel.className = "ghost";
+  cancel.textContent = "Cancel";
+  btns.append(save, cancel);
+  row.append(div, btns);
+  nameIn.focus();
+  save.onclick = () => {
+    const v = nameIn.value.trim();
+    if (!v) { nameIn.focus(); return; }
+    cur[i] = { t: v, s: noteIn.value.trim() };
+    saveFood(cur);
+    loadFood();
+  };
+  cancel.onclick = () => loadFood();
+}
+function addFoodItem() {
+  const nameIn = $("food-new-name"), noteIn = $("food-new-note");
+  const title = (nameIn.value || "").trim();
+  if (!title) { nameIn.focus(); return; }
+  const cur = getFood();
+  cur.push({ t: title, s: (noteIn.value || "").trim() });
+  saveFood(cur);
+  nameIn.value = "";
+  noteIn.value = "";
+  loadFood();
+  nameIn.focus();
+}
+
 // --- Fullscreen swipe viewer (tap any photo) ---
 let vItems = [], vIdx = 0, vTouchX = null;
 function openViewer(items, i) {
@@ -793,6 +917,12 @@ document.addEventListener("DOMContentLoaded", () => {
   };
   $("gear-add").onclick = addGearItem;
   $("gear-new").addEventListener("keydown", (e) => { if (e.key === "Enter") addGearItem(); });
+  loadFood();
+  $("food-add").onclick = addFoodItem;
+  [$("food-new-name"), $("food-new-note")].forEach((el) =>
+    el.addEventListener("keydown", (e) => { if (e.key === "Enter") addFoodItem(); })
+  );
+  $("food-reset").onclick = () => { localStorage.removeItem(FOOD_KEY); loadFood(); };
   loadCalcInputs();
   recalc();
   ["up-pace","down-pace","start-time","cables-up","summit-min","cables-down"].forEach(id => {

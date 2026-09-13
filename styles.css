@@ -26,8 +26,8 @@ h1{margin:.2em 0;font-size:32px} h2{margin-top:0}
 .checklist{list-style:none;padding:0;margin:0;display:grid;gap:8px}
 .checklist li{background:#111a13;border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;gap:10px;align-items:flex-start}
 .checklist input{width:20px;height:20px;margin-top:2px;accent-color:var(--accent)}
-.add-row{display:flex;gap:8px;margin-top:10px}
-.add-row input{flex:1;padding:10px;border-radius:8px;border:1px solid var(--line);background:#111a13;color:var(--text)}
+.add-row{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.add-row input{flex:1;min-width:140px;padding:10px;border-radius:8px;border:1px solid var(--line);background:#111a13;color:var(--text)}
 .icon-btn{padding:4px 12px;font-size:18px;line-height:1;border-radius:8px;flex-shrink:0}
 .warn-box{border-left:4px solid var(--warn);background:#221a10;padding:10px 12px;border-radius:8px;margin:8px 0}
 .danger-box{border-left:4px solid var(--danger);background:#241313;padding:10px 12px;border-radius:8px;margin:8px 0}
