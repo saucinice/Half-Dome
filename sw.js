@@ -1,4 +1,4 @@
-const CACHE = "halfdome-v5";
+const CACHE = "halfdome-v6";
 const ASSETS = ["./", "./index.html", "./styles.css", "./app.js", "./manifest.webmanifest",
   "./icons/icon-192.png", "./icons/icon-512.png"];
 
@@ -34,8 +34,8 @@ self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
   if (e.request.method !== "GET" || url.origin !== location.origin) return;
 
-  // Shared photo list: network-first, cache fallback (works offline after first sync)
-  if (url.pathname.endsWith("/api/photos")) {
+  // Shared photo list + shared food list: network-first, cache fallback
+  if (url.pathname.endsWith("/api/photos") || url.pathname.endsWith("/api/list")) {
     e.respondWith(
       fetch(e.request).then((res) => {
         if (res.ok) {

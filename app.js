@@ -624,6 +624,7 @@ async function bootCloud() {
   if (!cloudEnabled) return;
   const slots = Object.keys(slotRefreshers);
   for (const s of slots) await pushPending(s);
+  await syncFood();
   slots.forEach((s) => { try { slotRefreshers[s](); } catch {} });
   const pill = $("offline-pill");
   if (pill && navigator.onLine) pill.textContent = "● online — photos sync across devices";
@@ -746,6 +747,7 @@ const DEFAULT_FOOD = [
   { t: "El Portal options", s: "Just outside the park • market + diners on the drive out" },
 ];
 const FOOD_KEY = "hd-food-v1";
+const FOOD_TS_KEY = "hd-food-ts";
 function getFood() {
   try {
     const raw = JSON.parse(localStorage.getItem(FOOD_KEY) || "null");
@@ -754,6 +756,43 @@ function getFood() {
   return DEFAULT_FOOD.map((f) => ({ ...f }));
 }
 function saveFood(items) { try { localStorage.setItem(FOOD_KEY, JSON.stringify(items)); } catch {} }
+// Stamp + push after any local change (add/edit/remove/reset)
+function foodMutated() {
+  try { localStorage.setItem(FOOD_TS_KEY, String(Date.now())); } catch {}
+  foodPush();
+}
+async function foodPush() {
+  if (!cloudEnabled || !navigator.onLine) return;
+  try {
+    await fetch("./api/list?name=food", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ items: getFood(), updatedAt: Number(localStorage.getItem(FOOD_TS_KEY) || Date.now()) }),
+    });
+  } catch {}
+}
+// Pull shared list on boot: newer side wins, then re-render
+async function syncFood() {
+  if (!cloudEnabled) return;
+  try {
+    if (!localStorage.getItem(FOOD_TS_KEY)) {
+      const custom = JSON.stringify(getFood()) !== JSON.stringify(DEFAULT_FOOD);
+      localStorage.setItem(FOOD_TS_KEY, String(custom ? Date.now() : 0));
+    }
+    const r = await fetch("./api/list?name=food", { cache: "no-store" });
+    if (!r.ok) return;
+    const cloud = await r.json();
+    const localTs = Number(localStorage.getItem(FOOD_TS_KEY) || 0);
+    const cloudTs = Number((cloud && cloud.updatedAt) || 0);
+    if (cloud && cloudTs > localTs && Array.isArray(cloud.items)) {
+      localStorage.setItem(FOOD_KEY, JSON.stringify(cloud.items));
+      localStorage.setItem(FOOD_TS_KEY, String(cloudTs));
+      loadFood();
+    } else if (localTs > cloudTs) {
+      await foodPush();
+    }
+  } catch {}
+}
 function foodMapsUrl(item) {
   if (item.url && /^https?:\/\//i.test(item.url)) return item.url;
   return "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(item.t + " Yosemite");
@@ -809,6 +848,7 @@ function loadFood() {
       cur.splice(i, 1);
       saveFood(cur);
       loadFood();
+      foodMutated();
     };
     btns.append(edit, rm);
     row.append(link, btns);
@@ -851,6 +891,7 @@ function editFoodRow(row, i) {
     cur[i] = { t: v, s: item.s || "", url: linkIn.value.trim() };
     saveFood(cur);
     loadFood();
+    foodMutated();
   };
   cancel.onclick = () => loadFood();
 }
@@ -865,6 +906,7 @@ function addFoodItem() {
   urlIn.value = "";
   nameIn.value = "";
   loadFood();
+  foodMutated();
   urlIn.focus();
 }
 
@@ -929,7 +971,7 @@ document.addEventListener("DOMContentLoaded", () => {
   [$("food-new-url"), $("food-new-name")].forEach((el) =>
     el.addEventListener("keydown", (e) => { if (e.key === "Enter") addFoodItem(); })
   );
-  $("food-reset").onclick = () => { localStorage.removeItem(FOOD_KEY); loadFood(); };
+  $("food-reset").onclick = () => { localStorage.removeItem(FOOD_KEY); loadFood(); foodMutated(); };
   loadCalcInputs();
   recalc();
   ["up-pace","down-pace","start-time","cables-up","summit-min","cables-down"].forEach(id => {
