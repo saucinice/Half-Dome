@@ -72,5 +72,9 @@ textarea.desc-edit{width:100%;min-height:76px;padding:10px;border-radius:8px;bor
 #viewer-next{right:10px}
 .thumb button{position:absolute;top:4px;right:4px;padding:2px 8px;border-radius:999px;font-size:12px}
 .empty-note{font-size:13px;color:var(--muted)}
+.food-list{display:grid;gap:8px;margin-top:8px}
+.food-row{background:#111a13;border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;gap:10px;align-items:center;justify-content:space-between}
+.food-maps{text-decoration:none;flex-shrink:0}
+.gmaps-btn{display:inline-block;background:var(--accent);color:#0c140d;border-radius:10px;padding:10px 14px;font-weight:700;text-decoration:none}
 footer{color:var(--muted);font-size:12px;text-align:center;padding:20px}
 kbd{background:#111a13;border:1px solid var(--line);border-radius:6px;padding:1px 6px;font-size:12px}
