@@ -785,26 +785,15 @@ function loadFood() {
   items.forEach((item, i) => {
     const row = document.createElement("div");
     row.className = "food-row";
-    const div = document.createElement("div");
-    div.style.flex = "1";
-    const b = document.createElement("strong");
-    b.textContent = item.t;
-    div.appendChild(b);
-    if (item.s) {
-      const s = document.createElement("div");
-      s.className = "small muted";
-      s.textContent = item.s;
-      div.appendChild(s);
-    }
+    const link = document.createElement("a");
+    link.className = "food-link";
+    link.textContent = item.t;
+    link.href = foodMapsUrl(item);
+    link.target = "_blank";
+    link.rel = "noopener";
     const btns = document.createElement("div");
     btns.style.display = "flex";
     btns.style.gap = "6px";
-    const maps = document.createElement("a");
-    maps.className = "ghost small-btn food-maps";
-    maps.textContent = "Maps";
-    maps.href = foodMapsUrl(item);
-    maps.target = "_blank";
-    maps.rel = "noopener";
     const edit = document.createElement("button");
     edit.className = "ghost small-btn";
     edit.textContent = "Edit";
@@ -821,8 +810,8 @@ function loadFood() {
       saveFood(cur);
       loadFood();
     };
-    btns.append(maps, edit, rm);
-    row.append(div, btns);
+    btns.append(edit, rm);
+    row.append(link, btns);
     wrap.appendChild(row);
   });
 }
@@ -838,16 +827,13 @@ function editFoodRow(row, i) {
   const nameIn = document.createElement("input");
   nameIn.type = "text"; nameIn.value = item.t; nameIn.maxLength = 80;
   nameIn.setAttribute("aria-label", "Restaurant name");
-  const noteIn = document.createElement("input");
-  noteIn.type = "text"; noteIn.value = item.s || ""; noteIn.maxLength = 120;
-  noteIn.setAttribute("aria-label", "Note");
-  noteIn.placeholder = "Note (optional)";
+  nameIn.placeholder = "Name";
   const linkIn = document.createElement("input");
   linkIn.type = "url"; linkIn.inputMode = "url";
   linkIn.value = item.url || ""; linkIn.maxLength = 500;
   linkIn.setAttribute("aria-label", "Google Maps link");
   linkIn.placeholder = "Google Maps link";
-  div.append(nameIn, linkIn, noteIn);
+  div.append(nameIn, linkIn);
   const btns = document.createElement("div");
   btns.style.display = "flex";
   btns.style.gap = "6px";
@@ -862,7 +848,7 @@ function editFoodRow(row, i) {
   save.onclick = () => {
     const v = nameIn.value.trim();
     if (!v) { nameIn.focus(); return; }
-    cur[i] = { t: v, s: noteIn.value.trim(), url: linkIn.value.trim() };
+    cur[i] = { t: v, s: item.s || "", url: linkIn.value.trim() };
     saveFood(cur);
     loadFood();
   };
