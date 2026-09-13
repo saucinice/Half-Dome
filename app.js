@@ -754,8 +754,22 @@ function getFood() {
   return DEFAULT_FOOD.map((f) => ({ ...f }));
 }
 function saveFood(items) { try { localStorage.setItem(FOOD_KEY, JSON.stringify(items)); } catch {} }
-function foodMapsUrl(title) {
-  return "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(title + " Yosemite");
+function foodMapsUrl(item) {
+  if (item.url && /^https?:\/\//i.test(item.url)) return item.url;
+  return "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(item.t + " Yosemite");
+}
+// Try to pull a readable name out of a Google Maps link: /place/Name… or ?q=Name
+function foodNameFromUrl(url) {
+  try {
+    const u = new URL(url);
+    const place = u.pathname.match(/\/place\/([^/?#]+)/);
+    if (place) return decodeURIComponent(place[1].replace(/\+/g, " "));
+    for (const k of ["q", "query", "destination"]) {
+      const v = u.searchParams.get(k);
+      if (v) return v;
+    }
+  } catch {}
+  return "";
 }
 function loadFood() {
   const items = getFood();
@@ -788,7 +802,7 @@ function loadFood() {
     const maps = document.createElement("a");
     maps.className = "ghost small-btn food-maps";
     maps.textContent = "Maps";
-    maps.href = foodMapsUrl(item.t);
+    maps.href = foodMapsUrl(item);
     maps.target = "_blank";
     maps.rel = "noopener";
     const edit = document.createElement("button");
@@ -827,7 +841,13 @@ function editFoodRow(row, i) {
   const noteIn = document.createElement("input");
   noteIn.type = "text"; noteIn.value = item.s || ""; noteIn.maxLength = 120;
   noteIn.setAttribute("aria-label", "Note");
-  div.append(nameIn, noteIn);
+  noteIn.placeholder = "Note (optional)";
+  const linkIn = document.createElement("input");
+  linkIn.type = "url"; linkIn.inputMode = "url";
+  linkIn.value = item.url || ""; linkIn.maxLength = 500;
+  linkIn.setAttribute("aria-label", "Google Maps link");
+  linkIn.placeholder = "Google Maps link";
+  div.append(nameIn, linkIn, noteIn);
   const btns = document.createElement("div");
   btns.style.display = "flex";
   btns.style.gap = "6px";
@@ -842,23 +862,24 @@ function editFoodRow(row, i) {
   save.onclick = () => {
     const v = nameIn.value.trim();
     if (!v) { nameIn.focus(); return; }
-    cur[i] = { t: v, s: noteIn.value.trim() };
+    cur[i] = { t: v, s: noteIn.value.trim(), url: linkIn.value.trim() };
     saveFood(cur);
     loadFood();
   };
   cancel.onclick = () => loadFood();
 }
 function addFoodItem() {
-  const nameIn = $("food-new-name"), noteIn = $("food-new-note");
-  const title = (nameIn.value || "").trim();
-  if (!title) { nameIn.focus(); return; }
+  const urlIn = $("food-new-url"), nameIn = $("food-new-name");
+  const url = (urlIn.value || "").trim();
+  if (!/^https?:\/\//i.test(url)) { urlIn.focus(); return; }
+  const title = (nameIn.value || "").trim() || foodNameFromUrl(url) || "Saved spot";
   const cur = getFood();
-  cur.push({ t: title, s: (noteIn.value || "").trim() });
+  cur.push({ t: title, s: "", url });
   saveFood(cur);
+  urlIn.value = "";
   nameIn.value = "";
-  noteIn.value = "";
   loadFood();
-  nameIn.focus();
+  urlIn.focus();
 }
 
 // --- Fullscreen swipe viewer (tap any photo) ---
@@ -919,7 +940,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("gear-new").addEventListener("keydown", (e) => { if (e.key === "Enter") addGearItem(); });
   loadFood();
   $("food-add").onclick = addFoodItem;
-  [$("food-new-name"), $("food-new-note")].forEach((el) =>
+  [$("food-new-url"), $("food-new-name")].forEach((el) =>
     el.addEventListener("keydown", (e) => { if (e.key === "Enter") addFoodItem(); })
   );
   $("food-reset").onclick = () => { localStorage.removeItem(FOOD_KEY); loadFood(); };
